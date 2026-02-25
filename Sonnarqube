@@ -1,0 +1,238 @@
+1. Recommended Setup (Before Installation)
+
+✅ Use a separate EC2 instance
+❌ Do NOT install SonarQube together with Nexus, Git, Maven, etc. on the same small server.
+
+SonarQube is memory hungry.
+
+Minimum Requirements:
+
+t3.medium or higher
+
+4GB+ RAM
+
+20GB+ storage
+
+🛠 2. Install Prerequisites
+
+Connect to your EC2:
+
+ssh -i your-key.pem ec2-user@your-ec2-ip
+
+Update system:
+
+sudo dnf update -y
+✅ Install Java 17 (Required for SonarQube 10+)
+
+Check if Java exists:
+
+java -version
+
+If not installed:
+
+sudo dnf install java-17-amazon-corretto -y
+
+Verify:
+
+java -version
+✅ Install PostgreSQL (Recommended Database)
+
+SonarQube DOES NOT recommend H2 for production.
+
+Install PostgreSQL:
+
+sudo dnf install postgresql15-server postgresql15 -y
+
+Initialize DB:
+
+sudo postgresql-setup --initdb
+
+Start PostgreSQL:
+
+sudo systemctl enable postgresql
+sudo systemctl start postgresql
+
+Check status:
+
+sudo systemctl status postgresql
+🗄 3. Configure Database for SonarQube
+
+Switch to postgres user:
+
+sudo -i -u postgres
+
+Open psql:
+
+psql
+
+Create database:
+
+CREATE DATABASE sonarqube;
+CREATE USER sonar WITH ENCRYPTED PASSWORD 'sonarpassword';
+GRANT ALL PRIVILEGES ON DATABASE sonarqube TO sonar;
+\q
+
+Exit:
+
+exit
+👤 4. Create Sonar User (Best Practice)
+
+Create system user:
+
+sudo useradd sonar
+📥 5. Download & Install SonarQube
+
+Go to official site and copy latest LTS version link.
+
+Example:
+
+cd /opt
+sudo dnf install wget unzip -y
+sudo wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-10.4.0.XXXX.zip
+
+Unzip:
+
+sudo unzip sonarqube-*.zip
+
+Rename:
+
+sudo mv sonarqube-* sonarqube
+
+Set permissions:
+
+sudo chown -R sonar:sonar /opt/sonarqube
+⚙ 6. Configure SonarQube Database Connection
+
+Edit config:
+
+sudo nano /opt/sonarqube/conf/sonar.properties
+
+Find and edit:
+
+sonar.jdbc.username=sonar
+sonar.jdbc.password=sonarpassword
+sonar.jdbc.url=jdbc:postgresql://localhost/sonarqube
+
+Save & exit.
+
+🔐 7. Increase System Limits (Important)
+
+Edit:
+
+sudo nano /etc/sysctl.conf
+
+Add:
+
+vm.max_map_count=262144
+fs.file-max=65536
+
+Apply:
+
+sudo sysctl -p
+
+Edit limits:
+
+sudo nano /etc/security/limits.conf
+
+Add:
+
+sonar   -   nofile   65536
+sonar   -   nproc    4096
+🚀 8. Create Systemd Service (Auto Start)
+
+Create service:
+
+sudo nano /etc/systemd/system/sonarqube.service
+
+Paste:
+
+[Unit]
+Description=SonarQube Service
+After=network.target
+
+[Service]
+Type=forking
+User=sonar
+Group=sonar
+ExecStart=/opt/sonarqube/bin/linux-x86-64/sonar.sh start
+ExecStop=/opt/sonarqube/bin/linux-x86-64/sonar.sh stop
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+Reload daemon:
+
+sudo systemctl daemon-reload
+
+Enable service:
+
+sudo systemctl enable sonarqube
+
+Start:
+
+sudo systemctl start sonarqube
+
+Check status:
+
+sudo systemctl status sonarqube
+🌍 9. Open Firewall Port
+
+Default SonarQube port:
+
+9000
+
+If using AWS Security Group:
+
+👉 Add inbound rule:
+
+Type: Custom TCP
+
+Port: 9000
+
+Source: Your IP or 0.0.0.0/0 (for testing)
+
+🔎 10. Access SonarQube
+
+Open browser:
+
+http://your-ec2-public-ip:9000
+
+Default login:
+
+Username: admin
+Password: admin
+
+You will be forced to change password.
+
+✅ After Installation (Important For DevOps Practice)
+
+You can now:
+
+✔ Integrate with Maven
+✔ Integrate with Jenkins
+✔ Integrate with GitHub Actions
+✔ Scan Java project
+
+Example Maven scan:
+
+mvn sonar:sonar \
+  -Dsonar.projectKey=my-project \
+  -Dsonar.host.url=http://your-ip:9000 \
+  -Dsonar.login=your-token
+🚨 Important Advice For You (Based On Your Previous Server Issues)
+
+You mentioned:
+
+my server refuse to load after installing many tools
+
+✔ Good decision to use separate servers
+✔ SonarQube + Nexus + Jenkins should NOT be installed together on small EC2
+
+Best architecture:
+
+EC2-1 → Jenkins
+EC2-2 → SonarQube
+EC2-3 → Nexus
+
+That is production-like setup.
